@@ -7,11 +7,12 @@ module OmniAuth
     class Slack < OmniAuth::Strategies::OAuth2
       option :name, 'slack'
 
-      option :authorize_options, [:scope, :team]
+      option :authorize_options, [:scope, :user_scope, :team]
 
       option :client_options, {
         site: 'https://slack.com',
-        token_url: '/api/oauth.access'
+        token_url: '/api/oauth.v2.access',
+        authorize_url: '/oauth/v2/authorize'
       }
 
       option :auth_token_params, {
@@ -25,27 +26,26 @@ module OmniAuth
       uid { "#{user_identity['id']}-#{team_identity['id']}" }
 
       info do
-        hash = {
-          name: user_identity['name'],
-          email: user_identity['email'],    # Requires the identity.email scope
-          image: user_identity['image_48'], # Requires the identity.avatar scope
-          team_name: team_identity['name']  # Requires the identity.team scope
+        {
+          team: { # Requires the team:read scope
+            id: team_info.dig('team', 'id'),
+            name: team_info.dig('team', 'name'),
+            domain: team_info.dig('team', 'domain'),
+            icon: team_info.dig('team', 'icon', 'image_102')
+          },
+          user: { # Requires the users:read scope
+            id: user_info.dig('user', 'id'),
+            name: user_info.dig('user', 'name'),
+            real_name: user_info.dig('user', 'real_name'),
+            email: user_info.dig('user', 'profile', 'email'),
+            image: user_info.dig('user', 'profile', 'image_48'),
+          }
         }
-
-        unless skip_info?
-          [:first_name, :last_name, :phone].each do |key|
-            hash[key] = user_info['user'].to_h['profile'].to_h[key.to_s]
-          end
-        end
-
-        hash
       end
 
       extra do
         {
           raw_info: {
-            team_identity: team_identity,  # Requires identify:basic scope
-            user_identity: user_identity,  # Requires identify:basic scope
             user_info: user_info,         # Requires the users:read scope
             team_info: team_info,         # Requires the team:read scope
             web_hook_info: web_hook_info,
@@ -56,7 +56,7 @@ module OmniAuth
 
       def authorize_params
         super.tap do |params|
-          %w[scope team].each do |v|
+          options[:authorize_options].each do |v|
             if request.params[v]
               params[v.to_sym] = request.params[v]
             end
