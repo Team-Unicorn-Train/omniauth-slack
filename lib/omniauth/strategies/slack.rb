@@ -58,7 +58,7 @@ module OmniAuth
         super.tap do |params|
           options[:authorize_options].each do |v|
             if request.params[v]
-              params[v.to_sym] = request.params[v]
+              params[v] = request.params[v.to_s]
             end
           end
         end
